@@ -1,8 +1,8 @@
 using Microsoft.EntityFrameworkCore;
 using Xunit;
-using ChakChakShop.Domain.Entities;
-using ChakChakShop.Infrastructure.Data;
-using ChakChakShop.Infrastructure.Repositories.EfCore;
+using ChakChakShop.API.Data.Models;
+using ChakChakShop.API.Data.Context;
+using ChakChakShop.API.Repositories;
 
 namespace ChakChakShop.Tests.Repositories;
 
