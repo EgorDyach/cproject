@@ -1,0 +1,8 @@
+<Solution>
+  <Folder Name="/src/">
+    <Project Path="src/ChakChakShop.API/ChakChakShop.API.csproj" />
+  </Folder>
+  <Folder Name="/tests/">
+    <Project Path="tests/ChakChakShop.Tests/ChakChakShop.Tests.csproj" />
+  </Folder>
+</Solution>

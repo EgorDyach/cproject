@@ -1,0 +1,15 @@
+{
+  "Servers": {
+    "1": {
+      "Name": "ChakChakShop / лабораторные",
+      "Group": "Servers",
+      "Host": "postgres",
+      "Port": 5432,
+      "MaintenanceDB": "postgres",
+      "Username": "postgres",
+      "PassFile": "/var/lib/pgadmin/pgpass",
+      "SSLMode": "prefer",
+      "Comment": "chakchakshop — БД сервиса; lab_indexes — лаба 1; lab_scaling — лаба 2"
+    }
+  }
+}

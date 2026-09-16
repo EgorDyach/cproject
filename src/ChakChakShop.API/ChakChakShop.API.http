@@ -1,0 +1,6 @@
+@ChakChakShop.API_HostAddress = http://localhost:0
+
+GET {{ChakChakShop.API_HostAddress}}/weatherforecast/
+Accept: application/json
+
+###
