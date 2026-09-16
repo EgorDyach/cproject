@@ -37,8 +37,8 @@ INSERT INTO products (id, name, description, price, stock_quantity, category_id,
     ('bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbb1', 'Чак-чак с орехами 500г', 'Чак-чак с добавлением грецких орехов', 550.00, 20, 'bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb', CURRENT_TIMESTAMP),
     ('bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbb2', 'Чак-чак с сухофруктами 500г', 'Чак-чак с курагой и изюмом', 580.00, 18, 'bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb', CURRENT_TIMESTAMP),
     ('bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbb3', 'Чак-чак премиум 500г', 'Чак-чак с орехами и сухофруктами', 650.00, 12, 'bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb', CURRENT_TIMESTAMP),
-    ('cccccccc-cccc-cccc-cccc-cccccccccccc1', 'Подарочный набор "Мини"', 'Набор из классического чак-чака 500г и чак-чака с орехами 500г', 950.00, 10, 'cccccccc-cccc-cccc-cccc-cccccccccccc', CURRENT_TIMESTAMP),
-    ('cccccccc-cccc-cccc-cccc-cccccccccccc2', 'Подарочный набор "Семейный"', 'Большой набор: классический 1кг, с орехами 500г, с сухофруктами 500г', 1800.00, 8, 'cccccccc-cccc-cccc-cccc-cccccccccccc', CURRENT_TIMESTAMP)
+    ('cccccccc-cccc-cccc-cccc-ccccccccccc1', 'Подарочный набор "Мини"', 'Набор из классического чак-чака 500г и чак-чака с орехами 500г', 950.00, 10, 'cccccccc-cccc-cccc-cccc-cccccccccccc', CURRENT_TIMESTAMP),
+    ('cccccccc-cccc-cccc-cccc-ccccccccccc2', 'Подарочный набор "Семейный"', 'Большой набор: классический 1кг, с орехами 500г, с сухофруктами 500г', 1800.00, 8, 'cccccccc-cccc-cccc-cccc-cccccccccccc', CURRENT_TIMESTAMP)
 ON CONFLICT (id) DO NOTHING;
 --rollback DELETE FROM products WHERE id LIKE 'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaa%' OR id LIKE 'bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbb%' OR id LIKE 'cccccccc-cccc-cccc-cccc-cccccccccccc%';
 

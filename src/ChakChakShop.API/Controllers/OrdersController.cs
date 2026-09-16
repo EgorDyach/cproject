@@ -3,6 +3,7 @@ using Microsoft.AspNetCore.Authorization;
 using System.Security.Claims;
 using ChakChakShop.API.DTO.Requests;
 using ChakChakShop.API.DTO.Responses;
+using ChakChakShop.API.Data.Connections;
 using ChakChakShop.API.Services;
 
 namespace ChakChakShop.API.Controllers;
@@ -17,13 +18,25 @@ namespace ChakChakShop.API.Controllers;
 public class OrdersController : ControllerBase
 {
     private readonly IOrderService _orderService;
+    private readonly IDbConnectionFactory _connections;
     private readonly ILogger<OrdersController> _logger;
 
-    public OrdersController(IOrderService orderService, ILogger<OrdersController> logger)
+    public OrdersController(
+        IOrderService orderService,
+        IDbConnectionFactory connections,
+        ILogger<OrdersController> logger)
     {
         _orderService = orderService;
+        _connections = connections;
         _logger = logger;
     }
+
+    /// <summary>
+    /// Помечает ответ узлом, который его обслужил. Списочные ручки читают
+    /// с Replica, точечные — с Primary; заголовок делает это видимым
+    /// снаружи, без залезания в логи.
+    /// </summary>
+    private void MarkNode(string node) => Response.Headers["X-Db-Node"] = node;
 
     private Guid GetCurrentUserId()
     {
@@ -48,6 +61,7 @@ public class OrdersController : ControllerBase
         CancellationToken cancellationToken)
     {
         var result = await _orderService.GetOrdersAsync(request, cancellationToken);
+        MarkNode(_connections.ReadNodeName);
         return Ok(result);
     }
 
@@ -59,12 +73,17 @@ public class OrdersController : ControllerBase
     /// <response code="200">Returns the list of user's orders</response>
     /// <response code="401">Unauthorized</response>
     [HttpGet("my")]
-    [ProducesResponseType(typeof(IEnumerable<OrderDto>), StatusCodes.Status200OK)]
+    [ProducesResponseType(typeof(PagedResponse<OrderDto>), StatusCodes.Status200OK)]
     [ProducesResponseType(StatusCodes.Status401Unauthorized)]
-    public async Task<ActionResult<IEnumerable<OrderDto>>> GetMyOrders(CancellationToken cancellationToken)
+    public async Task<ActionResult<PagedResponse<OrderDto>>> GetMyOrders(
+        [FromQuery] PagedRequest request,
+        CancellationToken cancellationToken)
     {
+        // Страница запрашивается у базы напрямую: у крупного клиента могут быть
+        // десятки тысяч заказов, и отдавать их одним ответом нельзя.
         var userId = GetCurrentUserId();
-        var orders = await _orderService.GetUserOrdersAsync(userId, cancellationToken);
+        var orders = await _orderService.GetUserOrdersPagedAsync(userId, request, cancellationToken);
+        MarkNode(_connections.ReadNodeName);
         return Ok(orders);
     }
 
@@ -95,6 +114,9 @@ public class OrdersController : ControllerBase
             return Forbid();
         }
 
+        // Осознанно остаётся на Primary: клиент запрашивает заказ по id
+        // сразу после его создания, и на Replica его может ещё не быть.
+        MarkNode("primary");
         return Ok(order);
     }
 

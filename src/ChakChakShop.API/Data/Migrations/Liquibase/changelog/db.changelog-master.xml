@@ -5,10 +5,11 @@
     xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog
     http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-4.24.xsd">
 
-    <includeAll path="." relativeToChangelogFile="true">
-        <includeFilter>*.sql</includeFilter>
-    </includeAll>
+    <!-- Порядок применения задан явно: includeAll сортирует файлы по имени,
+         а зависимость seed-данных от схемы должна быть выражена, а не выведена. -->
+    <include file="001-initial-schema.sql"      relativeToChangelogFile="true"/>
+    <include file="002-seed-data.sql"           relativeToChangelogFile="true"/>
+    <include file="004-performance-indexes.sql" relativeToChangelogFile="true"/>
+    <include file="005-partition-automation.sql" relativeToChangelogFile="true"/>
 
 </databaseChangeLog>
-
-

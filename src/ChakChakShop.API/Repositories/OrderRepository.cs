@@ -20,6 +20,37 @@ public class OrderRepository : Repository<Order>, IOrderRepository
             .ToListAsync(cancellationToken);
     }
 
+    public async Task<IEnumerable<Order>> GetPagedAsync(int skip, int take, CancellationToken cancellationToken = default)
+    {
+        // Skip/Take внутри IQueryable транслируются в OFFSET/LIMIT,
+        // то есть выполняются на стороне PostgreSQL, а не в памяти.
+        return await _dbSet
+            .OrderByDescending(o => o.CreatedAt)
+            .Skip(skip)
+            .Take(take)
+            .ToListAsync(cancellationToken);
+    }
+
+    public async Task<int> GetCountAsync(CancellationToken cancellationToken = default)
+    {
+        return await _dbSet.CountAsync(cancellationToken);
+    }
+
+    public async Task<IEnumerable<Order>> GetByUserIdPagedAsync(Guid userId, int skip, int take, CancellationToken cancellationToken = default)
+    {
+        return await _dbSet
+            .Where(o => o.UserId == userId)
+            .OrderByDescending(o => o.CreatedAt)
+            .Skip(skip)
+            .Take(take)
+            .ToListAsync(cancellationToken);
+    }
+
+    public async Task<int> GetCountByUserIdAsync(Guid userId, CancellationToken cancellationToken = default)
+    {
+        return await _dbSet.CountAsync(o => o.UserId == userId, cancellationToken);
+    }
+
     public async Task<Order?> GetOrderWithItemsAsync(Guid orderId, CancellationToken cancellationToken = default)
     {
         return await _dbSet

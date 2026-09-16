@@ -3,26 +3,36 @@ using System.Linq.Expressions;
 using Dapper;
 using Microsoft.Extensions.Configuration;
 using Npgsql;
+using ChakChakShop.API.Data.Connections;
 using ChakChakShop.API.Data.Models;
 
 namespace ChakChakShop.API.Repositories;
 
 public class DapperOrderRepository : IOrderRepository
 {
-    private readonly string _connectionString;
+    private readonly IDbConnectionFactory _connections;
 
     static DapperOrderRepository()
     {
         DefaultTypeMap.MatchNamesWithUnderscores = true;
     }
 
-    public DapperOrderRepository(IConfiguration configuration)
+    public DapperOrderRepository(IDbConnectionFactory connections)
     {
-        _connectionString = configuration.GetConnectionString("DefaultConnection") 
-            ?? throw new InvalidOperationException("Connection string 'DefaultConnection' not found.");
+        _connections = connections;
     }
 
-    private IDbConnection CreateConnection() => new NpgsqlConnection(_connectionString);
+    /// <summary>Primary: запись и те чтения, которым нельзя видеть устаревшие данные.</summary>
+    private IDbConnection CreateConnection() => _connections.CreateWriteConnection();
+
+    /// <summary>
+    /// Replica: списки и счётчики. Эти ответы переживают отставание на доли
+    /// секунды — страница заказов, опоздавшая на один свежий заказ, ничего
+    /// не ломает. Точечные чтения по id сюда не переводятся: сразу после
+    /// POST /api/orders клиент запрашивает созданный заказ по идентификатору,
+    /// и на реплике его может ещё не быть.
+    /// </summary>
+    private IDbConnection CreateReadConnection() => _connections.CreateReadConnection();
 
     public async Task<Order?> GetByIdAsync(Guid id, CancellationToken cancellationToken = default)
     {
@@ -108,6 +118,57 @@ public class DapperOrderRepository : IOrderRepository
 
         using var connection = CreateConnection();
         return await connection.QueryAsync<Order>(
+            new CommandDefinition(sql, new { UserId = userId }, cancellationToken: cancellationToken));
+    }
+
+    public async Task<IEnumerable<Order>> GetPagedAsync(int skip, int take, CancellationToken cancellationToken = default)
+    {
+        // LIMIT/OFFSET в SQL: без него пришлось бы вычитывать всю таблицу
+        // и отбрасывать лишнее в памяти приложения.
+        // Опирается на индекс IX_orders_created_at (миграция 004).
+        const string sql = @"
+            SELECT id, user_id AS UserId, total_amount AS TotalAmount, status, created_at AS CreatedAt, updated_at AS UpdatedAt
+            FROM orders
+            ORDER BY created_at DESC
+            LIMIT @Take OFFSET @Skip";
+
+        using var connection = CreateReadConnection();
+        return await connection.QueryAsync<Order>(
+            new CommandDefinition(sql, new { Take = take, Skip = skip }, cancellationToken: cancellationToken));
+    }
+
+    public async Task<int> GetCountAsync(CancellationToken cancellationToken = default)
+    {
+        const string sql = "SELECT COUNT(*) FROM orders";
+
+        using var connection = CreateReadConnection();
+        return await connection.ExecuteScalarAsync<int>(
+            new CommandDefinition(sql, cancellationToken: cancellationToken));
+    }
+
+    public async Task<IEnumerable<Order>> GetByUserIdPagedAsync(Guid userId, int skip, int take, CancellationToken cancellationToken = default)
+    {
+        // Опирается на индекс IX_orders_user_id_created_at (миграция 004):
+        // user_id закрывает условие равенства, created_at DESC — сортировку,
+        // поэтому план обходится без узла Sort и останавливается на LIMIT.
+        const string sql = @"
+            SELECT id, user_id AS UserId, total_amount AS TotalAmount, status, created_at AS CreatedAt, updated_at AS UpdatedAt
+            FROM orders
+            WHERE user_id = @UserId
+            ORDER BY created_at DESC
+            LIMIT @Take OFFSET @Skip";
+
+        using var connection = CreateReadConnection();
+        return await connection.QueryAsync<Order>(
+            new CommandDefinition(sql, new { UserId = userId, Take = take, Skip = skip }, cancellationToken: cancellationToken));
+    }
+
+    public async Task<int> GetCountByUserIdAsync(Guid userId, CancellationToken cancellationToken = default)
+    {
+        const string sql = "SELECT COUNT(*) FROM orders WHERE user_id = @UserId";
+
+        using var connection = CreateReadConnection();
+        return await connection.ExecuteScalarAsync<int>(
             new CommandDefinition(sql, new { UserId = userId }, cancellationToken: cancellationToken));
     }
 

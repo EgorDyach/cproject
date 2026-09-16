@@ -2,6 +2,7 @@ using System.Text;
 using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Options;
 using Microsoft.Extensions.Logging;
 using Microsoft.IdentityModel.Tokens;
 using Microsoft.OpenApi.Models;
@@ -10,9 +11,12 @@ using StackExchange.Redis;
 using Prometheus;
 using ChakChakShop.API.Middleware;
 using ChakChakShop.API.HealthChecks;
+using ChakChakShop.API.Data.Connections;
+using ChakChakShop.API.Data.Sharding;
 using ChakChakShop.API.Data.Context;
 using ChakChakShop.API.Repositories;
 using ChakChakShop.API.Services;
+using ChakChakShop.API.Services.Partitioning;
 using ChakChakShop.API.Auth;
 
 var builder = WebApplication.CreateBuilder(args);
@@ -158,6 +162,22 @@ builder.Services.AddAuthorization(options =>
     options.AddPolicy("ManagerOrAdmin", policy => policy.RequireRole("Admin", "Manager"));
 });
 
+// Маршрутизация Primary/Replica: запись всегда на Primary, списочные
+// чтения — на Replica, если она настроена (лаб. работа №4).
+builder.Services.AddSingleton<IDbConnectionFactory, DbConnectionFactory>();
+
+// Шардирование (лаб. работы №5-6): роутер выбирает узел по ключу.
+builder.Services.Configure<ShardOptions>(builder.Configuration.GetSection(ShardOptions.SectionName));
+builder.Services.AddSingleton<IShardRouter>(sp =>
+{
+    var opts = sp.GetRequiredService<IOptions<ShardOptions>>().Value;
+    var count = opts.Connections.Count == 0 ? 1 : opts.Connections.Count;
+    return opts.Strategy == ShardStrategy.ConsistentHashing
+        ? new ConsistentHashRouter(count, opts.VirtualNodes)
+        : new ModuloShardRouter(count);
+});
+builder.Services.AddSingleton<ShardedOrderReader>();
+
 builder.Services.AddScoped<IProductRepository, ProductRepository>();
 builder.Services.AddScoped<ICategoryRepository, CategoryRepository>();
 builder.Services.AddScoped<IUserRepository, UserRepository>();
@@ -168,6 +188,19 @@ builder.Services.AddScoped<ICategoryService, CategoryService>();
 builder.Services.AddScoped<IOrderService, OrderService>();
 builder.Services.AddScoped<IAuthService, AuthService>();
 builder.Services.AddScoped<ICacheService, RedisCacheService>();
+
+// Автоматизация партиционирования: ночное создание партиций, проверка
+// горизонта и alerting. Отключается флагом Partitioning:Enabled.
+builder.Services.Configure<PartitionOptions>(
+    builder.Configuration.GetSection(PartitionOptions.SectionName));
+builder.Services.AddHttpClient();
+builder.Services.AddSingleton<IPartitionManager, PartitionManager>();
+builder.Services.AddSingleton<IPartitionAlertService, PartitionAlertService>();
+builder.Services.AddSingleton<IPartitionAlertNotifier, LogAlertNotifier>();
+builder.Services.AddSingleton<IPartitionAlertNotifier, WebhookAlertNotifier>();
+builder.Services.AddSingleton<IPartitionAlertNotifier, EmailAlertNotifier>();
+builder.Services.AddHostedService<CreatePartitionsJob>();
+builder.Services.AddHostedService<PartitionHealthCheckJob>();
 
 builder.Services.AddHealthChecks()
     .AddCheck<DatabaseHealthCheck>("database")

@@ -26,13 +26,15 @@ public class OrderService : IOrderService
 
     public async Task<PagedResponse<OrderDto>> GetOrdersAsync(PagedRequest request, CancellationToken cancellationToken = default)
     {
-        var orders = await _orderRepository.GetAllAsync(cancellationToken);
-        var totalCount = orders.Count();
-        var pagedOrders = orders.Skip(request.Skip).Take(request.PageSize).ToList();
+        // Страница берётся из базы через LIMIT/OFFSET. Прежняя версия читала
+        // все заказы целиком и отбрасывала лишние в памяти: на миллионе строк
+        // это 256 мс и сортировка 30 MB во временных файлах на каждый запрос.
+        var orders = await _orderRepository.GetPagedAsync(request.Skip, request.PageSize, cancellationToken);
+        var totalCount = await _orderRepository.GetCountAsync(cancellationToken);
 
         return new PagedResponse<OrderDto>
         {
-            Data = pagedOrders.Select(o => o.ToDto()),
+            Data = orders.Select(o => o.ToDto()),
             PageNumber = request.PageNumber,
             PageSize = request.PageSize,
             TotalCount = totalCount
@@ -49,6 +51,20 @@ public class OrderService : IOrderService
     {
         var orders = await _orderRepository.GetByUserIdAsync(userId, cancellationToken);
         return orders.Select(o => o.ToDto());
+    }
+
+    public async Task<PagedResponse<OrderDto>> GetUserOrdersPagedAsync(Guid userId, PagedRequest request, CancellationToken cancellationToken = default)
+    {
+        var orders = await _orderRepository.GetByUserIdPagedAsync(userId, request.Skip, request.PageSize, cancellationToken);
+        var totalCount = await _orderRepository.GetCountByUserIdAsync(userId, cancellationToken);
+
+        return new PagedResponse<OrderDto>
+        {
+            Data = orders.Select(o => o.ToDto()),
+            PageNumber = request.PageNumber,
+            PageSize = request.PageSize,
+            TotalCount = totalCount
+        };
     }
 
     public async Task<OrderDto> CreateOrderAsync(Guid userId, CreateOrderDto dto, CancellationToken cancellationToken = default)
@@ -96,6 +112,15 @@ public class OrderService : IOrderService
             Status = "Pending",
             CreatedAt = DateTime.UtcNow
         };
+
+        // Позиции собираются до того, как у заказа появляется идентификатор,
+        // поэтому связь проставляется здесь. Без этой строки в order_items
+        // уходит Guid.Empty и вставка падает на внешнем ключе
+        // FK_order_items_orders_order_id.
+        foreach (var item in orderItems)
+        {
+            item.OrderId = order.Id;
+        }
 
         var createdOrder = await _orderRepository.CreateOrderWithItemsAsync(order, orderItems, cancellationToken);
         
